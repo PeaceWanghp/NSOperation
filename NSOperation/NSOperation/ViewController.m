@@ -10,6 +10,7 @@
 
 @interface ViewController ()
 {
+    UILabel *_label;
     NSOperationQueue *_operationQueue;
     
     NSInteger _count;
@@ -28,19 +29,17 @@
         _operationQueue.maxConcurrentOperationCount = 5;//设置最大并发数
     }
     
-    float baseY = 20;
-    float spaceHeight = 60;
-    
-    [self addOperationButton:baseY];
-    [self addDependencyOperationButton:baseY+spaceHeight];
-    [self baseOperationButton:baseY+spaceHeight*2];
-    [self cancelAllButton:baseY+spaceHeight*3];
-    [self cancelButton:baseY+spaceHeight*4];
-    [self waitOperationButton:baseY+spaceHeight*5];
-    [self waitQueueButton:baseY+spaceHeight*6];
-    [self pauseButton:baseY+spaceHeight*7];
+    [self setTitleLabel];
+    [self singleOperationButton:0];
+    [self addOperationButton:1];
+    [self addDependencyOperationButton:2];
+    [self baseOperationButton:3];
+    [self cancelAllButton:4];
+    [self cancelButton:5];
+    [self waitOperationButton:6];
+    [self waitQueueButton:7];
+    [self pauseButton:8];
 }
-
 
 - (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
@@ -50,22 +49,39 @@
 #pragma mark -
 #pragma mark -- Operation
 - (void)action:(NSString *)key {
-    NSLog(@"Begin %@",key);
+    NSLog(@"Begin %@,%@",key,[NSThread currentThread]);
     sleep(3);
     _count ++;
     NSLog(@"End %@",key);
+    
+    //Main Thread
+    __weak typeof(self) weakSelf = self;
+    [[NSOperationQueue mainQueue] addOperationWithBlock:^{
+        NSLog(@"CurrentThread---%@", [NSThread currentThread]);
+        [weakSelf setTitleLabel];
+    }];
 }
 
 #pragma mark -
 #pragma mark -- Action
+- (void)singleOperationAction {
+    NSLog(@"---------------- Single Operation Action");
+    NSInvocationOperation *operation = [[NSInvocationOperation alloc] initWithTarget:self selector:@selector(action:) object:@"fffffff"];
+    [operation start];
+}
+
 - (void)addBaseOperationAction {
     NSLog(@"---------------- Add Base Operation Action");
     NSInvocationOperation *operation = [[NSInvocationOperation alloc] initWithTarget:self selector:@selector(action:) object:@"1111111"];
     [_operationQueue addOperation:operation];
     
-    [_operationQueue addOperation:[NSBlockOperation blockOperationWithBlock:^{
+    NSBlockOperation *blockOperation = [NSBlockOperation blockOperationWithBlock:^{
         [self action:@"222222222"];
-    }]];
+    }];
+    [blockOperation addExecutionBlock:^{
+        [self action:@"222222222---------"];
+    }];
+    [_operationQueue addOperation:blockOperation];
     
     [_operationQueue addOperationWithBlock:^() {
         [self action:@"33333333333"];
@@ -83,6 +99,7 @@
     NSBlockOperation *operation3 = [NSBlockOperation blockOperationWithBlock:^{
         [self action:@"66666666666"];
     }];
+    operation3.queuePriority = NSOperationQueuePriorityVeryHigh;
     [_operationQueue addOperation:operation1];
     [_operationQueue addOperation:operation2];
     [_operationQueue addOperation:operation3];
@@ -90,14 +107,15 @@
 
 - (void)addDependencyOperationAction {
     NSLog(@"------------------Add Dependency Operation Action");
+    __weak typeof(self) weakSelf = self;
     NSBlockOperation *operation1 = [NSBlockOperation blockOperationWithBlock:^{
-        [self action:@"77777777777"];
+        [weakSelf action:@"77777777777"];
     }];
     NSBlockOperation *operation2 = [NSBlockOperation blockOperationWithBlock:^{
-        [self action:@"888888888888"];
+        [weakSelf action:@"888888888888"];
     }];
     NSBlockOperation *operation3 = [NSBlockOperation blockOperationWithBlock:^{
-        [self action:@"99999999999"];
+        [weakSelf action:@"99999999999"];
     }];
     
     [operation1 addDependency:operation2];
@@ -163,7 +181,34 @@
 
 #pragma mark -
 #pragma mark -- UI
-- (void)addOperationButton:(float)y {
+- (void)setTitleLabel {
+    if (!_label) {
+        _label = [[UILabel alloc] init];
+        _label.backgroundColor = [UIColor whiteColor];
+        _label.textColor = [UIColor blackColor];
+        _label.textAlignment = NSTextAlignmentCenter;
+        _label.frame = CGRectMake(0, 0, self.view.frame.size.width, 60);
+        [self .view addSubview:_label];
+    }
+    
+    [_label setText:[NSString stringWithFormat:@"%d",(int)_count]];
+}
+
+- (void)singleOperationButton:(int)index {
+    float y = [self y:index];
+    
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+    [button setBackgroundColor:[UIColor cyanColor]];
+    [button setFrame:CGRectMake(0, y, self.view.frame.size.width, 44)];
+    [button setTitle:@"Single Operation" forState:UIControlStateNormal];
+    [button setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+    [button addTarget:self action:@selector(singleOperationAction) forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:button];
+}
+
+- (void)addOperationButton:(int)index {
+    float y = [self y:index];
+    
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     [button setBackgroundColor:[UIColor cyanColor]];
     [button setFrame:CGRectMake(0, y, self.view.frame.size.width, 44)];
@@ -173,7 +218,9 @@
     [self.view addSubview:button];
 }
 
-- (void)addDependencyOperationButton:(float)y {
+- (void)addDependencyOperationButton:(int)index {
+    float y = [self y:index];
+    
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     [button setBackgroundColor:[UIColor cyanColor]];
     [button setFrame:CGRectMake(0, y, self.view.frame.size.width, 44)];
@@ -183,7 +230,9 @@
     [self.view addSubview:button];
 }
 
-- (void)cancelAllButton:(float)y {
+- (void)cancelAllButton:(int)index {
+    float y = [self y:index];
+    
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     [button setBackgroundColor:[UIColor cyanColor]];
     [button setFrame:CGRectMake(0, y, self.view.frame.size.width, 44)];
@@ -193,7 +242,9 @@
     [self.view addSubview:button];
 }
 
-- (void)cancelButton:(float)y {
+- (void)cancelButton:(int)index {
+    float y = [self y:index];
+    
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     [button setBackgroundColor:[UIColor cyanColor]];
     [button setFrame:CGRectMake(0, y, self.view.frame.size.width, 44)];
@@ -203,7 +254,9 @@
     [self.view addSubview:button];
 }
 
-- (void)waitOperationButton:(float)y {
+- (void)waitOperationButton:(int)index {
+    float y = [self y:index];
+    
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     [button setBackgroundColor:[UIColor cyanColor]];
     [button setFrame:CGRectMake(0, y, self.view.frame.size.width, 44)];
@@ -213,7 +266,9 @@
     [self.view addSubview:button];
 }
 
-- (void)waitQueueButton:(float)y {
+- (void)waitQueueButton:(int)index {
+    float y = [self y:index];
+    
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     [button setBackgroundColor:[UIColor cyanColor]];
     [button setFrame:CGRectMake(0, y, self.view.frame.size.width, 44)];
@@ -223,7 +278,9 @@
     [self.view addSubview:button];
 }
 
-- (void)baseOperationButton:(float)y {
+- (void)baseOperationButton:(int)index {
+    float y = [self y:index];
+    
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     [button setBackgroundColor:[UIColor cyanColor]];
     [button setFrame:CGRectMake(0, y, self.view.frame.size.width, 44)];
@@ -233,7 +290,9 @@
     [self.view addSubview:button];
 }
 
-- (void)pauseButton:(float)y {
+- (void)pauseButton:(int)index {
+    float y = [self y:index];
+    
     UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
     [button setBackgroundColor:[UIColor cyanColor]];
     [button setFrame:CGRectMake(0, y, self.view.frame.size.width, 44)];
@@ -241,6 +300,13 @@
     [button setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
     [button addTarget:self action:@selector(pauseAction) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:button];
+}
+
+- (float)y:(int)index {
+    float baseY = 60;
+    float spaceHeight = 50;
+    
+    return baseY + spaceHeight * index;
 }
 
 @end
